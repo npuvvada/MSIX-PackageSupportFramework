@@ -1202,9 +1202,20 @@ static path_redirect_info ShouldRedirectImpl(const CharT* path, redirect_flags f
     }
     LogString(inst, L"\tFRF Should: for path", widen(path).c_str());
 
+    bool userProfilePath = false;
+    size_t found1 = (widen(path)).find(L"UserProfiles", 0);
+    if (found1 != std::wstring::npos)
+    {
+        userProfilePath = true;
+        if (needMBox && userProfilePath)
+            MessageBoxEx(NULL, L"UserProfiles in path", L"UserProfiles debugging", 0, 0);
+    }
+
     size_t found = (widen(path)).find(L"WritablePackageRoot", 0);
     if (found != std::wstring::npos)
     {
+        if (needMBox && userProfilePath)
+            MessageBoxEx(NULL, L"Prevent redundant redirection", L"UserProfiles debugging", 0, 0);
         LogString(inst, L"Prevent redundant redirection.", widen(path).c_str());
         return result;
     }
@@ -1221,6 +1232,9 @@ static path_redirect_info ShouldRedirectImpl(const CharT* path, redirect_flags f
 
     if (normalizedPath.path_type == psf::dos_path_type::local_device)
     {
+        if (needMBox && userProfilePath)
+            MessageBoxEx(NULL, L"FRF: Path is of type local device so FRF should ignore.", L"UserProfiles debugging", 0, 0);
+
         LogString(L"\t\tFRF: Path is of type local device so FRF should ignore.", path);
         return result;
     }
@@ -1228,6 +1242,8 @@ static path_redirect_info ShouldRedirectImpl(const CharT* path, redirect_flags f
     if (!normalizedPath.drive_absolute_path)
     {
         // FUTURE: We could do better about canonicalising paths, but the cost/benefit doesn't make it worth it right now
+        if (needMBox && userProfilePath)
+            MessageBoxEx(NULL, L"!normalizedPath.drive_absolute_path", L"UserProfiles debugging", 0, 0);
         return result;
     }
 
@@ -1254,6 +1270,12 @@ static path_redirect_info ShouldRedirectImpl(const CharT* path, redirect_flags f
     for (auto& redirectSpec : g_redirectionSpecs)
     {
         //LogString(inst, L"\t\tFRF Check against: base", redirectSpec.base_path.c_str());
+        if (needMBox && userProfilePath) {
+            MessageBoxEx(NULL, (LPCWSTR)vfspath.drive_absolute_path, L"UserProfiles debugging - Input VFS Absolute Path", 0, 0);
+            MessageBoxEx(NULL, (LPCWSTR)normalizedPath.drive_absolute_path, L"UserProfiles debugging - Input Normalize Path", 0, 0);
+            MessageBoxA(NULL, (LPCSTR)redirectSpec.base_path.string().c_str(), "UserProfiles debugging - Base path config.json", 0);
+        }
+
         if (path_relative_to(vfspath.drive_absolute_path, redirectSpec.base_path))
         {
             if (needMBox)
@@ -1355,6 +1377,9 @@ static path_redirect_info ShouldRedirectImpl(const CharT* path, redirect_flags f
         }
         else
         {
+            if (needMBox && userProfilePath)
+                MessageBoxEx(NULL, L"FRF Not in ball park of base", L"UserProfiles debugging", 0, 0);
+
             LogString(inst, L"\t\tFRF Not in ball park of base", redirectSpec.base_path.c_str());
         }
     }
