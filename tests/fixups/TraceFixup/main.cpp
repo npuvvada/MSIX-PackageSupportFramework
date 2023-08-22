@@ -184,7 +184,7 @@ void Log_ETW_PostMsgOperationA(const char* operation, const char* inputs, const 
 {
     try
     {
-        TraceLoggingWrite(0x00, // handle to my provider
+        TraceLoggingWrite(g_Log_ETW_ComponentProvider, // handle to my provider
             "TraceEvent",              // Event Name that should uniquely identify your event.
             TraceLoggingValue(operation, "Operation"),
             TraceLoggingValue(inputs, "Inputs"),
@@ -197,6 +197,39 @@ void Log_ETW_PostMsgOperationA(const char* operation, const char* inputs, const 
             TelemetryPrivacyDataTag(PDT_ProductAndServiceUsage),
             TraceLoggingKeyword(MICROSOFT_KEYWORD_MEASURES)
         ); // Field for your event in the form of (value, field name).
+
+//        MessageBoxEx(NULL, L"In Here-logwrite", L"In Here-logwrite", 0, 0);
+        std::string combined = "operation:\n"+std::string(operation) + "\n" + "inputs:\n" + std::string(inputs) + "\n" +
+                               "result:\n" + std::string(result) + "\n" + "outputs:\n" + std::string(outputs) + "\n" +
+                               "callingmodule:\n" + std::string(callingmodule) + "\n-----------------------------------\n";
+
+        wchar_t tempPath[MAX_PATH];
+        (DWORD) GetTempPathW(MAX_PATH, tempPath);
+
+        wchar_t filePath[MAX_PATH];
+        wcscpy_s(filePath, tempPath);
+        wcscat_s(filePath, L"PSF_EventLogs.txt");
+
+        HANDLE hFile = CreateFileW(
+            filePath,                  // File path and name
+            FILE_APPEND_DATA,             // Desired access (write)
+            0,                         // Share mode (none)
+            NULL,                      // Security attributes (default)
+            OPEN_EXISTING,             // Open existing file
+            FILE_ATTRIBUTE_NORMAL,     // File attributes (normal)
+            NULL                       // Template file (none)
+        );
+
+        DWORD bytesWritten;
+        (BOOL) WriteFile(
+            hFile,                      // File handle
+            combined.c_str(),               // Data buffer
+            static_cast<DWORD>(combined.length() * sizeof(char)),  // Number of bytes to write
+            &bytesWritten,              // Number of bytes written
+            NULL                        // Overlapped structure (not used)
+        );
+
+        CloseHandle(hFile);
     }
     catch (...)
     {
@@ -240,6 +273,24 @@ BOOL __stdcall DllMain(HINSTANCE, DWORD reason, LPVOID) noexcept try
     if (reason == DLL_PROCESS_ATTACH)
     {
         Log_ETW_Register();
+
+        wchar_t tempPath[MAX_PATH];
+        (DWORD) GetTempPathW(MAX_PATH, tempPath);
+
+        wchar_t filePath[MAX_PATH];
+        wcscpy_s(filePath, tempPath);
+        wcscat_s(filePath, L"PSF_EventLogs.txt");
+
+        HANDLE hFile = CreateFile(
+            filePath,                   // File path and name
+            GENERIC_WRITE,             // Desired access (write)
+            0,                         // Share mode (none)
+            NULL,                      // Security attributes (default)
+            CREATE_ALWAYS,             // Creation disposition (create new file)
+            FILE_ATTRIBUTE_NORMAL,     // File attributes (normal)
+            NULL                       // Template file (none)
+        );
+        CloseHandle(hFile);
 
         std::wstringstream traceDataStream;
 
