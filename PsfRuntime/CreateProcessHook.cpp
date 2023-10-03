@@ -24,6 +24,8 @@
 #include <psf_framework.h>
 
 #include "Config.h"
+#include "ArgRedirection.h"
+#include "psf_tracelogging.h"
 
 using namespace std::literals;
 
@@ -153,9 +155,28 @@ BOOL WINAPI CreateProcessFixup(
         processInformation = &pi;
     }
 
+    DWORD cnvtCmdLinePathLen = 0;
+    if (commandLine)
+    {
+        size_t cmdLineLen = strlenImpl(reinterpret_cast<const CharT*>(commandLine));
+        cnvtCmdLinePathLen = (cmdLineLen ? MAX_CMDLINE_PATH : 0); // avoid allocation when no cmdLine is passed
+    }
+
+    std::unique_ptr<CharT[]> cnvtCmdLine(new CharT[cnvtCmdLinePathLen]);
+    if (commandLine && cnvtCmdLine.get())
+    {
+        // Redirect createProcess arguments if any in native app data to per user per app data
+        memset(cnvtCmdLine.get(), 0, MAX_CMDLINE_PATH);
+        bool cmdLineConverted = convertCmdLineParameters(commandLine, cnvtCmdLine.get());
+        if (cmdLineConverted == true)
+        {
+            psf::TraceLogArgumentRedirection(commandLine, cnvtCmdLine.get());
+        }
+    }
+
     if (!CreateProcessImpl(
         applicationName,
-        commandLine,
+        (commandLine && cnvtCmdLine.get()) ? cnvtCmdLine.get() : commandLine,
         processAttributes,
         threadAttributes,
         inheritHandles,
@@ -165,6 +186,7 @@ BOOL WINAPI CreateProcessFixup(
         startupInfo,
         processInformation))
     {
+        psf::TraceLogExceptions("PSFRuntimeException", "Create Process failure");
         return FALSE;
     }
 
@@ -210,11 +232,20 @@ BOOL WINAPI CreateProcessFixup(
     fixupPath(finalPackagePath);
     fixupPath(exePath);
 
+    auto appConfig = PSFQueryCurrentAppLaunchConfig(true);
+    bool createProcessInAppContext = false;
+    auto createProcessInAppContextPtr = appConfig->try_get("inPackageContext");
+    if (createProcessInAppContextPtr)
+    {
+        createProcessInAppContext = createProcessInAppContextPtr->as_boolean().get();
+    }
+
 #if _DEBUG
     Log("\tPossible injection to process %ls %d.\n", exePath.data(), processInformation->dwProcessId);
 #endif
     if (((exePath.length() >= packagePath.length()) && (exePath.substr(0, packagePath.length()) == packagePath)) ||
-        ((exePath.length() >= finalPackagePath.length()) && (exePath.substr(0, finalPackagePath.length()) == finalPackagePath)))
+        ((exePath.length() >= finalPackagePath.length()) && (exePath.substr(0, finalPackagePath.length()) == finalPackagePath)) ||
+        (createProcessInAppContext)) // Inject psfRuntime into an external process that is run in package context 
     {
         // The target executable is in the package, so we _do_ want to fixup it
 #if _DEBUG
@@ -276,6 +307,7 @@ BOOL WINAPI CreateProcessFixup(
                     }
                     catch (...)
                     {
+                        psf::TraceLogExceptions("PSFRuntimeException", "Non-fatal error enumerating directories while looking for PsfRuntime");
                         Log("Non-fatal error enumerating directories while looking for PsfRuntime.");
                     }
                 }
@@ -329,6 +361,7 @@ BOOL WINAPI CreateProcessFixup(
 catch (...)
 {
     ::SetLastError(win32_from_caught_exception());
+    psf::TraceLogExceptions("PSFRuntimeException", "Create Process Hook failure");
     return FALSE;
 }
 
