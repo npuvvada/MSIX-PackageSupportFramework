@@ -27,6 +27,7 @@
 
 #include "Config.h"
 #include "JsonConfig.h"
+#include "psf_tracelogging.h"
 
 using namespace std::literals;
 
@@ -294,8 +295,16 @@ void load_json()
                 catch (...)
                 {
                     Log("Non-fatal error enumerating directories while looking for config.json.");
+                    psf::TraceLogExceptions("PSFConfigException", L"Non-fatal error enumerating directories while looking for config.json.");
                 }
             }
+        }
+
+        if (!file)
+        {
+            psf::TraceLogExceptions("PSFConfigException", "config.json was not found");
+            Log("config.json was not found");
+            throw std::runtime_error("'Config.json' was not found. Kindly add it inside the package and re-install the application.");
         }
     }
 
@@ -321,10 +330,12 @@ void load_json()
             msgStream << "Error: " << g_JsonHandler.error_message << "\n";
         }
         msgStream << "File Offest: " << result.Offset();
+        psf::TraceLogExceptions("PSFConfigException", msgStream.str().c_str());
         throw std::runtime_error(msgStream.str());
     }
     else if (!g_JsonHandler.root)
     {
+        psf::TraceLogExceptions("PSFConfigException", "config.json has no contents");
         throw std::runtime_error("config.json has no contents");
     }
 
@@ -497,11 +508,12 @@ PSFAPI const psf::json_object* __stdcall PSFQueryAppLaunchConfig(_In_ const wcha
     {
         Log("\tNo Matches");
     }
-
+    psf::TraceLogExceptions("PSFConfigException", (L"No matching app config found for appId " + std::wstring(applicationId)).c_str());
     return nullptr;
 }
 catch (...)
 {
+    psf::TraceLogExceptions("PSFConfigException", (L"PSFQueryAppLaunchConfig Exception " + std::wstring(applicationId)).c_str());
     return nullptr;
 }
 
@@ -578,11 +590,11 @@ PSFAPI const psf::json_object* __stdcall PSFQueryExeConfig(const wchar_t* execut
             }
         }
     }
-
     return nullptr;
 }
 catch (...)
 {
+    psf::TraceLogExceptions("PSFConfigException", (L"PSFQueryExeConfig Exception " + std::wstring(executable)).c_str());
     return nullptr;
 }
 
@@ -629,6 +641,7 @@ PSFAPI const psf::json_value* __stdcall PSFQueryConfig(const wchar_t* executable
 }
 catch (...)
 {
+    psf::TraceLogExceptions("PSFConfigException", (L"PSFQueryConfig failed. executable: " + std::wstring(executable) + L"dll: " + std::wstring(dll)).c_str());
     return nullptr;
 }
 
@@ -638,6 +651,7 @@ PSFAPI const psf::json_value* __stdcall PSFQueryDllConfig(const wchar_t* dll) no
 }
 catch (...)
 {
+    psf::TraceLogExceptions("PSFConfigException", (L"PSFQueryConfig failed. dll: " + std::wstring(dll)).c_str());
     return nullptr;
 }
 
